@@ -1,4 +1,4 @@
-// +build e2e
+// +build postupgrade
 
 /*
 Copyright 2020 The Knative Authors
@@ -16,16 +16,18 @@ limitations under the License.
 package e2e
 
 import (
+	"knative.dev/eventing-operator/test/common"
 	"testing"
 
-	"knative.dev/eventing-operator/test/common"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"knative.dev/eventing-operator/test"
 	"knative.dev/eventing-operator/test/resources"
 	"knative.dev/pkg/test/logstream"
 )
 
-// TestKnativeEventingDeployment verifies the KnativeEventing creation, deployment recreation, and KnativeEventing deletion.
-func TestKnativeEventingDeployment(t *testing.T) {
+// TestKnativeEventingUpgrade verifies the KnativeEventing creation, deployment recreation, and KnativeEventing deletion
+// after upgraded to the latest HEAD at master, with the latest generated manifest of KnativeEventing.
+func TestKnativeEventingUpgrade(t *testing.T) {
 	cancel := logstream.Start(t)
 	defer cancel()
 	clients := common.Setup(t)
@@ -46,6 +48,7 @@ func TestKnativeEventingDeployment(t *testing.T) {
 	// Test if KnativeEventing can reach the READY status
 	t.Run("create", func(t *testing.T) {
 		common.KnativeEventingVerify(t, clients, names)
+		knativeEventingVerifyDeployment(t, clients, names)
 	})
 
 	// Delete the deployments one by one to see if they will be recreated.
@@ -60,3 +63,33 @@ func TestKnativeEventingDeployment(t *testing.T) {
 		common.KnativeEventingDelete(t, clients, names)
 	})
 }
+
+// knativeEventingVerifyDeployment verify whether the deployments have the correct number and names.
+func knativeEventingVerifyDeployment(t *testing.T, clients *test.Clients, names test.ResourceNames) {
+	// Knative Eventing has 4 deployments.
+	expectedNumDeployments := 4
+	deploys := []string{"eventing-controller", "eventing-webhook", "imc-controller", "imc-dispatcher"}
+	dpList, err := clients.KubeClient.Kube.AppsV1().Deployments(names.Namespace).List(metav1.ListOptions{})
+	assertEqual(t, err, nil)
+	assertEqual(t, expectedNumDeployments, len(dpList.Items))
+	for _, deployment := range dpList.Items {
+		assertEqual(t, stringInList(deployment.Name, deploys), true)
+	}
+}
+
+func assertEqual(t *testing.T, actual, expected interface{}) {
+	if actual == expected {
+		return
+	}
+	t.Fatalf("expected does not equal actual. \nExpected: %v\nActual: %v", expected, actual)
+}
+
+func stringInList(a string, list []string) bool {
+	for _, b := range list {
+		if b == a {
+			return true
+		}
+	}
+	return false
+}
+
