@@ -28,7 +28,10 @@
 
 source $(dirname $0)/../vendor/knative.dev/test-infra/scripts/e2e-tests.sh
 
-OPERATOR_DIR=$(dirname $0)/..
+# inherited from vendor/knative.dev/test-infra/scripts/library.sh
+declare -A IS_PROW
+
+OPERATOR_DIR=$(cd $(dirname "$0")/.. && pwd)
 KNATIVE_EVENTING_DIR=${OPERATOR_DIR}/..
 
 # Namespace used for tests
@@ -72,7 +75,11 @@ function generate_latest_eventing_manifest() {
   for yaml in "${!COMPONENTS[@]}"; do
     local config="${COMPONENTS[${yaml}]}"
     echo "Building Knative Eventing - ${config}"
-    ko resolve -P -f ${config}/ | "${LABEL_YAML_CMD[@]}" > ${yaml}
+    if (( IS_PROW )); then
+        ko resolve -P -f ${config}/ | "${LABEL_YAML_CMD[@]}" > ${yaml}
+    else
+        ko resolve -f ${config}/ | "${LABEL_YAML_CMD[@]}" > ${yaml}
+    fi
   done
 
   EVENTING_YAML=${KNATIVE_EVENTING_DIR}/eventing/eventing.yaml
